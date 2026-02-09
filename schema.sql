@@ -10,12 +10,12 @@ CREATE TABLE IF NOT EXISTS message_store (
     id SERIAL PRIMARY KEY,
     session_id VARCHAR(255) NOT NULL,
     message JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Index for faster session-based queries
-    INDEX idx_session_id (session_id),
-    INDEX idx_created_at (created_at)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Create indexes for faster session-based queries
+CREATE INDEX IF NOT EXISTS idx_session_id ON message_store(session_id);
+CREATE INDEX IF NOT EXISTS idx_created_at ON message_store(created_at);
 
 -- Optional: Create a sessions metadata table to track session information
 CREATE TABLE IF NOT EXISTS sessions (
