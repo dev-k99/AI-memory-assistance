@@ -54,7 +54,7 @@ def initialize_schema():
         conn = psycopg2.connect(
             host="localhost",
             user="postgres",
-            password="VtrCor87",
+            password=os.getenv("POSTGRES_PASSWORD"),
             database="ai_assistant"
         )
         cursor = conn.cursor()
