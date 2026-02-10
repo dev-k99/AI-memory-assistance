@@ -7,7 +7,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langchain_postgres import PostgresChatMessageHistory
+from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -17,6 +17,7 @@ from datetime import datetime
 # Load environment variables (for local development)
 load_dotenv()
 
+DATABASE_URL = os.getenv("DATABASE_URL")
 # ================== Configuration ==================
 
 def get_config():
@@ -41,14 +42,15 @@ def get_config():
 
 def get_session_history(session_id: str, connection_string: str):
     """
-    Create or retrieve PostgreSQL chat message history for a session
+    Create or retrieve PostgreSQL chat message history for a session.
     """
-    return PostgresChatMessageHistory(
-        table_name="message_store",
+
+    return SQLChatMessageHistory(
         session_id=session_id,
-        connection_string=connection_string,
-        async_mode=False
+        connection=connection_string,   # ✅ new API (not deprecated)
+        table_name="message_store",
     )
+
 
 def clear_session_memory(session_id: str, connection_string: str):
     """
