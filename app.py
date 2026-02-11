@@ -47,7 +47,7 @@ def get_session_history(session_id: str, connection_string: str):
 
     return SQLChatMessageHistory(
         session_id=session_id,
-        connection=connection_string,   # ✅ new API (not deprecated)
+        connection=connection_string,   #  new API (not deprecated)
         table_name="message_store",
     )
 
@@ -105,7 +105,7 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    st.title("🧠 AI Assistant with Long-Term Memory")
+    st.title("AI Assistant with Long-Term Memory")
     st.caption("Powered by Groq (Llama 3.1 8B) and PostgreSQL")
     
     # Load configuration
@@ -113,7 +113,7 @@ def main():
     
     # Check if configuration is complete
     if not config.get('groq_api_key') or not config.get('database_url'):
-        st.error("⚠️ Missing Configuration")
+        st.error("Missing Configuration")
         st.info(
             "Please set up your environment:\n\n"
             "**Local Development:**\n"
@@ -134,7 +134,7 @@ def main():
     
     # ================== Sidebar ==================
     with st.sidebar:
-        st.header("💾 Session Management")
+        st.header("Session Management")
         
         # Display current session ID
         st.info(f"**Session ID:**\n`{st.session_state.session_id[:8]}...`")
@@ -146,21 +146,21 @@ def main():
                 config['database_url']
             )
             stored_messages = history.messages
-            st.success(f"✅ Database Connected")
+            st.success(f"Database Connected")
             st.metric("Messages in Memory", len(stored_messages))
         except Exception as e:
-            st.error(f"❌ Database Error: {str(e)}")
+            st.error(f"Database Error: {str(e)}")
             stored_messages = []
         
         st.divider()
         
         # Memory Display
-        st.subheader("🗂️ Current Session Memory")
+        st.subheader("Current Session Memory")
         
         if stored_messages:
             with st.expander("View All Messages", expanded=False):
                 for i, msg in enumerate(stored_messages):
-                    role = "👤 User" if isinstance(msg, HumanMessage) else "🤖 Assistant"
+                    role = "User" if isinstance(msg, HumanMessage) else "Assistant"
                     st.text(f"{role}:")
                     st.caption(msg.content[:100] + "..." if len(msg.content) > 100 else msg.content)
                     if i < len(stored_messages) - 1:
@@ -171,26 +171,26 @@ def main():
         st.divider()
         
         # Clear Memory Button
-        if st.button("🗑️ Clear Memory", type="secondary", use_container_width=True):
+        if st.button("Clear Memory", type="secondary", use_container_width=True):
             try:
                 clear_session_memory(st.session_state.session_id, config['database_url'])
                 st.session_state.messages = []
-                st.success("✅ Memory cleared!")
+                st.success("Memory cleared!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error clearing memory: {str(e)}")
         
         # New Session Button
-        if st.button("🆕 New Session", type="primary", use_container_width=True):
+        if st.button("New Session", type="primary", use_container_width=True):
             st.session_state.session_id = str(uuid.uuid4())
             st.session_state.messages = []
-            st.success("✅ New session started!")
+            st.success("New session started!")
             st.rerun()
         
         st.divider()
         
         # Settings
-        with st.expander("⚙️ Settings"):
+        with st.expander("Settings"):
             st.caption("**Model:** llama-3.1-8b-instant")
             st.caption("**Database:** PostgreSQL")
             st.caption(f"**Environment:** {'Production' if 'STREAMLIT' in os.environ else 'Local'}")
@@ -240,7 +240,7 @@ def main():
                     })
                     
                 except Exception as e:
-                    error_msg = f"❌ Error: {str(e)}"
+                    error_msg = f"Error: {str(e)}"
                     st.error(error_msg)
                     st.session_state.messages.append({
                         "role": "assistant",
@@ -250,7 +250,7 @@ def main():
     # Footer
     st.divider()
     st.caption(
-        "💡 **Tip:** This assistant remembers your conversation history. "
+        "**Tip:** This assistant remembers your conversation history. "
         "Try asking it to recall something from earlier in the conversation!"
     )
 
