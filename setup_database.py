@@ -30,13 +30,13 @@ def _validate_env():
 
     if missing:
         raise RuntimeError(
-            f"❌ Missing required environment variables: {', '.join(missing)}"
+            f"Missing required environment variables: {', '.join(missing)}"
         )
 
 
 def create_database():
     """Create the ai_assistant database if it doesn't exist"""
-    print("🗄️  Creating database...")
+    print("Creating database...")
 
     _validate_env()
 
@@ -57,23 +57,23 @@ def create_database():
         exists = cursor.fetchone()
 
         if exists:
-            print(f"✅ Database '{POSTGRES_DB}' already exists")
+            print(f"Database '{POSTGRES_DB}' already exists")
         else:
             cursor.execute(f"CREATE DATABASE {POSTGRES_DB}")
-            print(f"✅ Database '{POSTGRES_DB}' created successfully")
+            print(f"Database '{POSTGRES_DB}' created successfully")
 
         cursor.close()
         conn.close()
         return True
 
     except Exception as e:
-        print(f"❌ Error creating database: {e}")
+        print(f"Error creating database: {e}")
         return False
 
 
 def initialize_schema():
     """Run the schema.sql file to create tables"""
-    print("\n📋 Initializing database schema...")
+    print("\n Initializing database schema...")
 
     try:
         conn = psycopg2.connect(
@@ -90,7 +90,7 @@ def initialize_schema():
         cursor.execute(schema_sql)
         conn.commit()
 
-        print("✅ Schema initialized successfully")
+        print("Schema initialized successfully")
 
         cursor.execute("""
             SELECT table_name
@@ -109,13 +109,13 @@ def initialize_schema():
         return True
 
     except Exception as e:
-        print(f"❌ Error initializing schema: {e}")
+        print(f"Error initializing schema: {e}")
         return False
 
 
 def test_connection():
     """Test the database connection"""
-    print("\n🔍 Testing database connection...")
+    print("\n Testing database connection...")
 
     try:
         conn = psycopg2.connect(
@@ -128,24 +128,24 @@ def test_connection():
 
         cursor.execute("SELECT version();")
         version = cursor.fetchone()[0]
-        print(f"✅ Connected to: {version[:60]}...")
+        print(f"Connected to: {version[:60]}...")
 
         cursor.execute("SELECT COUNT(*) FROM message_store;")
         count = cursor.fetchone()[0]
-        print(f"✅ message_store table accessible (current messages: {count})")
+        print(f"message_store table accessible (current messages: {count})")
 
         cursor.close()
         conn.close()
         return True
 
     except Exception as e:
-        print(f"❌ Connection test failed: {e}")
+        print(f"Connection test failed: {e}")
         return False
 
 
 def main():
     print("=" * 60)
-    print("🧠 AI Assistant - Database Setup")
+    print("AI Assistant - Database Setup")
     print("=" * 60)
 
     if not create_database():
@@ -158,7 +158,7 @@ def main():
         return 1
 
     print("\n" + "=" * 60)
-    print("🎉 Database setup complete!")
+    print("Database setup complete!")
     print("=" * 60)
     print("\nNext steps:")
     print("1. Run: python test_config.py")
