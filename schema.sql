@@ -12,6 +12,9 @@ ON message_store(session_id);
 CREATE INDEX IF NOT EXISTS idx_created_at 
 ON message_store(created_at);
 
+CREATE INDEX IF NOT EXISTS idx_session_created 
+ON message_store(session_id, created_at);
+
 -- Sessions Table
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
