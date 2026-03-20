@@ -1,258 +1,208 @@
 """
-AI Assistant with Long-Term Memory
-Built with Groq, PostgreSQL, and Streamlit
+MemOS — The Memory Operating System for AI
+An agentic chatbot with persistent memory, RAG, and web search.
+Built with LangGraph · Groq · ChromaDB · PostgreSQL · LangSmith
 """
 
 import streamlit as st
 import os
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
-from langchain_community.chat_message_histories import SQLChatMessageHistory
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables.history import RunnableWithMessageHistory
 import uuid
-from datetime import datetime
+from dotenv import load_dotenv
+from langchain_core.messages import HumanMessage, AIMessage
 
-# Load environment variables (for local development)
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-# ================== Configuration ==================
 
-def get_config():
-    """
-    Get configuration from Streamlit secrets (production) or .env (local)
-    Priority: st.secrets > environment variables
-    """
+# ── Page config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="MemOS",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+def get_config() -> dict:
     config = {}
-    
-    # Try to get from Streamlit secrets first (production deployment)
     try:
-        config['groq_api_key'] = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY"))
-        config['database_url'] = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
+        config["groq_api_key"] = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY"))
+        config["database_url"] = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
+        config["langchain_api_key"] = st.secrets.get(
+            "LANGCHAIN_API_KEY", os.getenv("LANGCHAIN_API_KEY", "")
+        )
     except Exception:
-        # Fall back to environment variables (local development)
-        config['groq_api_key'] = os.getenv("GROQ_API_KEY")
-        config['database_url'] = os.getenv("DATABASE_URL")
-    
+        config["groq_api_key"] = os.getenv("GROQ_API_KEY")
+        config["database_url"] = os.getenv("DATABASE_URL")
+        config["langchain_api_key"] = os.getenv("LANGCHAIN_API_KEY", "")
+
+    # Push LangSmith vars into environment so agent.py picks them up
+    if config["langchain_api_key"]:
+        os.environ["LANGCHAIN_API_KEY"] = config["langchain_api_key"]
+        os.environ["LANGCHAIN_TRACING_V2"] = st.secrets.get(
+            "LANGCHAIN_TRACING_V2", os.getenv("LANGCHAIN_TRACING_V2", "true")
+        )
     return config
 
-# ================== Database Setup ==================
 
-def get_session_history(session_id: str, connection_string: str):
-    """
-    Create or retrieve PostgreSQL chat message history for a session.
-    """
-
-    return SQLChatMessageHistory(
-        session_id=session_id,
-        connection=connection_string,   #  new API (not deprecated)
-        table_name="message_store",
-    )
-
-
-def clear_session_memory(session_id: str, connection_string: str):
-    """
-    Clear all messages for a specific session
-    """
-    history = get_session_history(session_id, connection_string)
-    history.clear()
-
-# ================== LLM Setup ==================
-
-def create_llm_chain(groq_api_key: str, connection_string: str):
-    """
-    Create a LangChain chain with Groq LLM and PostgreSQL memory
-    """
-    # Initialize Groq LLM
-    llm = ChatGroq(
-        model="llama-3.1-8b-instant",
-        temperature=0.7,
-        groq_api_key=groq_api_key,
-        max_tokens=1024
-    )
-    
-    # Create prompt template with message history
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful AI assistant with long-term memory. "
-                   "You remember previous conversations and can reference them. "
-                   "Be conversational, helpful, and maintain context across sessions."),
-        MessagesPlaceholder(variable_name="history"),
-        ("human", "{input}")
-    ])
-    
-    # Create the chain
-    chain = prompt | llm
-    
-    # Wrap with message history
-    chain_with_history = RunnableWithMessageHistory(
-        chain,
-        lambda session_id: get_session_history(session_id, connection_string),
-        input_messages_key="input",
-        history_messages_key="history"
-    )
-    
-    return chain_with_history
-
-# ================== Streamlit UI ==================
-
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    st.set_page_config(
-        page_title="AI Assistant with Memory",
-        page_icon="🧠",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    st.title("AI Assistant with Long-Term Memory")
-    st.caption("Powered by Groq (Llama 3.1 8B) and PostgreSQL")
-    
-    # Load configuration
     config = get_config()
-    
-    # Check if configuration is complete
-    if not config.get('groq_api_key') or not config.get('database_url'):
-        st.error("Missing Configuration")
+
+    if not config.get("groq_api_key") or not config.get("database_url"):
+        st.error("Missing configuration")
         st.info(
-            "Please set up your environment:\n\n"
-            "**Local Development:**\n"
-            "1. Copy `.env.example` to `.env`\n"
-            "2. Add your `GROQ_API_KEY` and `DATABASE_URL`\n\n"
-            "**Production (Streamlit Cloud):**\n"
-            "1. Go to App Settings → Secrets\n"
-            "2. Add `GROQ_API_KEY` and `DATABASE_URL`"
+            "**Local:** Copy `env.example` → `.env` and fill in values.\n\n"
+            "**Streamlit Cloud:** Add secrets in App Settings → Secrets."
         )
         st.stop()
-    
-    # Initialize session state
-    if 'session_id' not in st.session_state:
+
+    # Lazy imports after config check (avoids slow model load on config error)
+    from agent import build_agent, stream_response, clear_session, get_pg_history
+    from rag.pipeline import ingest_uploaded_files, get_chunk_count
+
+    # ── Session state ──────────────────────────────────────────────────────────
+    if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
-    
-    if 'messages' not in st.session_state:
+    if "messages" not in st.session_state:
         st.session_state.messages = []
-    
-    # ================== Sidebar ==================
+
+    agent = build_agent(config["groq_api_key"])
+
+    # ── Header ─────────────────────────────────────────────────────────────────
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("# 🧠 MemOS")
+        st.caption(
+            "Memory Operating System · Groq llama-3.3-70b · LangGraph · ChromaDB · PostgreSQL"
+        )
+    with col2:
+        st.markdown(
+            "<div style='text-align:right; padding-top:10px'>"
+            "<span style='background:#6C63FF;color:white;padding:4px 10px;"
+            "border-radius:12px;font-size:13px'>v2.0</span></div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Sidebar ────────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.header("Session Management")
-        
-        # Display current session ID
-        st.info(f"**Session ID:**\n`{st.session_state.session_id[:8]}...`")
-        
-        # Database status
+        st.markdown("## Session")
+        st.info(f"**ID:** `{st.session_state.session_id[:8]}...`")
+
+        # DB metrics
         try:
-            history = get_session_history(
-                st.session_state.session_id,
-                config['database_url']
-            )
-            stored_messages = history.messages
-            st.success(f"Database Connected")
-            st.metric("Messages in Memory", len(stored_messages))
+            history = get_pg_history(st.session_state.session_id, config["database_url"])
+            msgs = history.messages
+            st.success("Database connected")
+            c1, c2 = st.columns(2)
+            c1.metric("Messages", len(msgs))
+            c2.metric("KB Chunks", get_chunk_count())
         except Exception as e:
-            st.error(f"Database Error: {str(e)}")
-            stored_messages = []
-        
+            st.error(f"DB error: {e}")
+            msgs = []
+
         st.divider()
-        
-        # Memory Display
-        st.subheader("Current Session Memory")
-        
-        if stored_messages:
-            with st.expander("View All Messages", expanded=False):
-                for i, msg in enumerate(stored_messages):
-                    role = "User" if isinstance(msg, HumanMessage) else "Assistant"
-                    st.text(f"{role}:")
-                    st.caption(msg.content[:100] + "..." if len(msg.content) > 100 else msg.content)
-                    if i < len(stored_messages) - 1:
+
+        # ── Knowledge Base upload ──────────────────────────────────────────────
+        st.markdown("### Knowledge Base")
+        uploaded = st.file_uploader(
+            "Upload documents (PDF, TXT, MD)",
+            type=["pdf", "txt", "md"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+        )
+        if uploaded and st.button("Ingest Documents", use_container_width=True):
+            with st.spinner("Processing documents..."):
+                n = ingest_uploaded_files(uploaded)
+            st.success(f"Added {n} chunks to knowledge base")
+            st.rerun()
+
+        st.divider()
+
+        # ── Memory viewer ──────────────────────────────────────────────────────
+        st.markdown("### Session Memory")
+        if msgs:
+            with st.expander("View history", expanded=False):
+                for i, msg in enumerate(msgs):
+                    role = "You" if isinstance(msg, HumanMessage) else "MemOS"
+                    st.caption(f"**{role}:** {msg.content[:120]}{'...' if len(msg.content) > 120 else ''}")
+                    if i < len(msgs) - 1:
                         st.divider()
         else:
-            st.info("No messages yet. Start a conversation!")
-        
+            st.caption("No messages yet.")
+
         st.divider()
-        
-        # Clear Memory Button
-        if st.button("Clear Memory", type="secondary", use_container_width=True):
+
+        # ── Controls ───────────────────────────────────────────────────────────
+        if st.button("Clear Memory", use_container_width=True):
             try:
-                clear_session_memory(st.session_state.session_id, config['database_url'])
+                clear_session(st.session_state.session_id, config["database_url"])
                 st.session_state.messages = []
-                st.success("Memory cleared!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Error clearing memory: {str(e)}")
-        
-        # New Session Button
+                st.error(str(e))
+
         if st.button("New Session", type="primary", use_container_width=True):
             st.session_state.session_id = str(uuid.uuid4())
             st.session_state.messages = []
-            st.success("New session started!")
             st.rerun()
-        
+
         st.divider()
-        
-        # Settings
+
+        # ── Settings / Observability ───────────────────────────────────────────
         with st.expander("Settings"):
-            st.caption("**Model:** llama-3.1-8b-instant")
-            st.caption("**Database:** PostgreSQL")
-            st.caption(f"**Environment:** {'Production' if 'STREAMLIT' in os.environ else 'Local'}")
-    
-    # ================== Main Chat Interface ==================
-    
-    # Load chat history from session state
+            st.caption("**Model:** llama-3.3-70b-versatile")
+            st.caption("**Embeddings:** all-MiniLM-L6-v2 (local)")
+            st.caption("**Vector DB:** ChromaDB (local)")
+            st.caption("**Memory DB:** PostgreSQL")
+            env = "Production" if os.getenv("STREAMLIT_SHARING_MODE") else "Local"
+            st.caption(f"**Environment:** {env}")
+
+        with st.expander("Observability"):
+            if config.get("langchain_api_key"):
+                st.success("LangSmith tracing active")
+                st.markdown("[View Traces ↗](https://smith.langchain.com)")
+            else:
+                st.info("Add `LANGCHAIN_API_KEY` to enable LangSmith tracing.")
+
+    # ── Chat messages ──────────────────────────────────────────────────────────
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
+        with st.chat_message(message["role"], avatar="🧠" if message["role"] == "assistant" else None):
             st.markdown(message["content"])
-    
-    # Chat input
-    if prompt := st.chat_input("Ask me anything..."):
-        # Display user message
+
+    # ── Chat input ─────────────────────────────────────────────────────────────
+    if prompt := st.chat_input("Ask anything — I remember everything..."):
         with st.chat_message("user"):
             st.markdown(prompt)
-        
-        # Add to session state
         st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Generate response
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    # Create LLM chain
-                    chain_with_history = create_llm_chain(
-                        config['groq_api_key'],
-                        config['database_url']
+
+        with st.chat_message("assistant", avatar="🧠"):
+            try:
+                response_text = st.write_stream(
+                    stream_response(
+                        agent,
+                        prompt,
+                        st.session_state.session_id,
+                        config["database_url"],
                     )
-                    
-                    # Get response with history context
-                    response = chain_with_history.invoke(
-                        {"input": prompt},
-                        config={"configurable": {"session_id": st.session_state.session_id}}
-                    )
-                    
-                    # Extract content
-                    response_content = response.content
-                    
-                    # Display response
-                    st.markdown(response_content)
-                    
-                    # Add to session state
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response_content
-                    })
-                    
-                except Exception as e:
-                    error_msg = f"Error: {str(e)}"
-                    st.error(error_msg)
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": error_msg
-                    })
-    
-    # Footer
+                )
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": response_text}
+                )
+            except Exception as e:
+                err = f"Error: {e}"
+                st.error(err)
+                st.session_state.messages.append({"role": "assistant", "content": err})
+
+    # ── Footer ─────────────────────────────────────────────────────────────────
     st.divider()
     st.caption(
-        "**Tip:** This assistant remembers your conversation history. "
-        "Try asking it to recall something from earlier in the conversation!"
+        "MemOS remembers every conversation across sessions. "
+        "Ask it to search the web or query your uploaded documents. "
+        "Powered by [Groq](https://groq.com) · [LangGraph](https://langchain-ai.github.io/langgraph/) · "
+        "[ChromaDB](https://www.trychroma.com) · [LangSmith](https://smith.langchain.com)"
     )
+
 
 if __name__ == "__main__":
     main()
