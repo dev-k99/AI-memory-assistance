@@ -3,30 +3,31 @@ Document loaders for RAG ingestion.
 Supports PDF, TXT, and Markdown files.
 """
 
-import tempfile
+from __future__ import annotations
+
 import os
-from langchain_core.documents import Document
+import tempfile
+from pathlib import Path
+
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_core.documents import Document
 
 
 def load_uploaded_file(uploaded_file) -> list[Document]:
     """
-    Load a Streamlit UploadedFile into a list of LangChain Documents.
-    Supports: .pdf, .txt, .md
+    Load a Streamlit UploadedFile into LangChain Documents.
+    Supports .pdf, .txt, and .md extensions.
     """
-    suffix = "." + uploaded_file.name.split(".")[-1].lower()
+    suffix = Path(uploaded_file.name).suffix.lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(uploaded_file.getvalue())
         tmp_path = tmp.name
 
     try:
-        if suffix == ".pdf":
-            loader = PyPDFLoader(tmp_path)
-        else:
-            loader = TextLoader(tmp_path, encoding="utf-8")
+        loader = PyPDFLoader(tmp_path) if suffix == ".pdf" else TextLoader(tmp_path, encoding="utf-8")
         docs = loader.load()
         for doc in docs:
             doc.metadata["source"] = uploaded_file.name
         return docs
     finally:
-        os.unlink(tmp_path)
+        Path(tmp_path).unlink(missing_ok=True)

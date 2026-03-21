@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS message_store (
     id BIGSERIAL PRIMARY KEY,
     session_id TEXT NOT NULL,
-    message JSONB NOT NULL,
+    message TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 

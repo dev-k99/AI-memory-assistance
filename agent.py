@@ -1,63 +1,87 @@
 """
-MemOS — LangGraph ReAct Agent
-Combines persistent PostgreSQL memory, RAG retrieval, and web search.
-LangSmith tracing is auto-enabled when LANGCHAIN_API_KEY is set.
+MemOS — LangGraph agent.
+Custom graph built with StateGraph/ToolNode so we control the full tool-binding
+chain (including parallel_tool_calls=False, which fixes Groq's failed_generation error).
+LangSmith tracing is auto-enabled when LANGCHAIN_API_KEY is set before import.
 """
 
-import os
+from __future__ import annotations
+
+from typing import Any, Literal
+
 import streamlit as st
-from typing import Iterator
-
-# ── LangSmith observability (auto-instruments LangChain/LangGraph) ────────────
-os.environ.setdefault("LANGCHAIN_TRACING_V2", os.getenv("LANGCHAIN_TRACING_V2", "false"))
-os.environ.setdefault("LANGCHAIN_API_KEY", os.getenv("LANGCHAIN_API_KEY", ""))
-os.environ.setdefault("LANGCHAIN_PROJECT", os.getenv("LANGCHAIN_PROJECT", "memos"))
-
-from langchain_groq import ChatGroq
 from langchain_community.chat_message_histories import SQLChatMessageHistory
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
-from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_groq import ChatGroq
+from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
 
-from tools.search import search_web
 from tools.rag_tool import retrieve_from_documents
+from tools.search import search_web
 
 TOOLS = [search_web, retrieve_from_documents]
 
-SYSTEM_PROMPT = """You are MemOS — an intelligent AI assistant with long-term memory, \
-web search, and a personal knowledge base.
+SYSTEM_PROMPT = (
+    "You are MemOS — an intelligent AI assistant with long-term memory, "
+    "web search, and a personal knowledge base.\n\n"
+    "Capabilities:\n"
+    "- Every conversation is persisted in PostgreSQL across sessions.\n"
+    "- Use search_web for current events, news, or anything outside your training data.\n"
+    "- Use retrieve_from_documents for questions about uploaded documents or the knowledge base.\n"
+    "- Think step by step and cite sources whenever you use a tool.\n\n"
+    "Guidelines:\n"
+    "- Prefer answering directly when you already know the answer.\n"
+    "- Be concise but thorough.\n"
+    "- When referencing past conversations, explicitly say you remember them."
+)
 
-Your capabilities:
-- You remember every conversation across sessions (stored in PostgreSQL)
-- You can search the web for current information using the search_web tool
-- You can retrieve information from uploaded documents using retrieve_from_documents
-- You think step by step and always cite your sources when using tools
 
-Guidelines:
-- Use tools when the question requires current information or document lookup
-- Answer directly from memory when you already know the answer
-- Be concise but thorough
-- When referencing past conversations, explicitly mention that you remember them"""
+def _should_continue(state: MessagesState) -> Literal["tools", "__end__"]:
+    last = state["messages"][-1]
+    if hasattr(last, "tool_calls") and last.tool_calls:
+        return "tools"
+    return "__end__"
 
 
 @st.cache_resource(show_spinner=False)
-def build_agent(groq_api_key: str) -> object:
-    """Build and cache the LangGraph ReAct agent. Built once per app session."""
+def build_agent(groq_api_key: str) -> Any:
+    """
+    Build and cache a custom LangGraph ReAct graph.
+    We bind tools directly so we can pass parallel_tool_calls=False,
+    which prevents Groq's failed_generation errors on tool calls.
+    """
+    # streaming=False here prevents Groq from streaming partial tool-call JSON chunks,
+    # which can produce malformed function arguments and trigger failed_generation.
+    # The graph itself streams tokens to the UI via stream_mode="messages".
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-8b-instant",
         temperature=0.7,
         groq_api_key=groq_api_key,
         max_tokens=2048,
-        streaming=True,
+        streaming=False,
     )
-    checkpointer = MemorySaver()
-    agent = create_react_agent(
-        model=llm,
-        tools=TOOLS,
-        prompt=SYSTEM_PROMPT,
-        checkpointer=checkpointer,
-    )
-    return agent
+    # Bind tools here — we own this call so we can set parallel_tool_calls=False
+    llm_with_tools = llm.bind_tools(TOOLS, parallel_tool_calls=False)
+    tool_node = ToolNode(TOOLS)
+
+    def agent_node(state: MessagesState) -> dict:
+        messages = state["messages"]
+        # Inject system prompt if not already present
+        if not isinstance(messages[0], SystemMessage):
+            messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+        return {"messages": [llm_with_tools.invoke(messages)]}
+
+    graph = StateGraph(MessagesState)
+    graph.add_node("agent", agent_node)
+    graph.add_node("tools", tool_node)
+    graph.add_edge(START, "agent")
+    graph.add_conditional_edges("agent", _should_continue)
+    graph.add_edge("tools", "agent")
+
+    # No checkpointer — PostgreSQL is the sole history store.
+    # Using MemorySaver alongside PostgreSQL causes duplicate messages in the
+    # graph state (checkpoint + loaded history), which breaks tool call formatting.
+    return graph.compile()
 
 
 def get_pg_history(session_id: str, connection_string: str) -> SQLChatMessageHistory:
@@ -69,71 +93,59 @@ def get_pg_history(session_id: str, connection_string: str) -> SQLChatMessageHis
 
 
 def load_pg_messages(session_id: str, connection_string: str) -> list[BaseMessage]:
-    """Load stored messages from PostgreSQL to seed the agent's in-memory checkpointer."""
-    history = get_pg_history(session_id, connection_string)
-    return history.messages
+    """Return all stored messages for a session from PostgreSQL."""
+    return get_pg_history(session_id, connection_string).messages
 
 
 def save_message_to_pg(
-    session_id: str, connection_string: str, role: str, content: str
-):
-    """Persist a single message to PostgreSQL."""
+    session_id: str,
+    connection_string: str,
+    role: str,
+    content: str,
+) -> None:
+    """Append a single human or assistant message to PostgreSQL."""
     history = get_pg_history(session_id, connection_string)
-    if role == "human":
-        history.add_message(HumanMessage(content=content))
-    else:
-        history.add_message(AIMessage(content=content))
+    msg = HumanMessage(content=content) if role == "human" else AIMessage(content=content)
+    history.add_message(msg)
 
 
-def clear_session(session_id: str, connection_string: str):
-    history = get_pg_history(session_id, connection_string)
-    history.clear()
+def clear_session(session_id: str, connection_string: str) -> None:
+    get_pg_history(session_id, connection_string).clear()
 
 
-def stream_response(
-    agent,
+def run_response(
+    agent: Any,
     query: str,
     session_id: str,
     connection_string: str,
-) -> Iterator[str]:
+) -> tuple[str, list[str]]:
     """
-    Stream the agent's response token by token.
-    Yields str chunks suitable for st.write_stream().
-    Also persists the exchange to PostgreSQL.
+    Run the agent and return (response_text, tools_used).
+    tools_used contains the names of any tools the agent called (e.g. "search_web").
+    Persists the full exchange to PostgreSQL on success.
     """
-    # Load full PostgreSQL history as seed messages
-    pg_messages = load_pg_messages(session_id, connection_string)
-    input_messages = pg_messages + [HumanMessage(content=query)]
-
-    config = {"configurable": {"thread_id": session_id}}
-    full_response = []
+    input_messages = load_pg_messages(session_id, connection_string) + [
+        HumanMessage(content=query)
+    ]
+    tools_used: list[str] = []
+    response_parts: list[str] = []
 
     for chunk in agent.stream(
         {"messages": input_messages},
-        config=config,
         stream_mode="messages",
     ):
-        # chunk is (message_chunk, metadata) when stream_mode="messages"
-        if isinstance(chunk, tuple):
-            msg_chunk, meta = chunk
-            # Only yield AI text tokens (not tool calls)
-            if (
-                hasattr(msg_chunk, "content")
-                and msg_chunk.content
-                and meta.get("langgraph_node") == "agent"
-            ):
-                text = msg_chunk.content
-                full_response.append(text)
-                yield text
-        else:
-            # Fallback: plain string chunk
-            if isinstance(chunk, str):
-                full_response.append(chunk)
-                yield chunk
+        if not isinstance(chunk, tuple):
+            continue
+        msg_chunk, meta = chunk
+        if meta.get("langgraph_node") != "agent":
+            continue
+        if hasattr(msg_chunk, "tool_calls") and msg_chunk.tool_calls:
+            tools_used.extend(tc.get("name", "") for tc in msg_chunk.tool_calls)
+        if hasattr(msg_chunk, "content") and msg_chunk.content:
+            response_parts.append(msg_chunk.content)
 
-    # Persist to PostgreSQL after streaming completes
-    if full_response:
+    response_text = "".join(response_parts)
+    if response_text:
         save_message_to_pg(session_id, connection_string, "human", query)
-        save_message_to_pg(
-            session_id, connection_string, "assistant", "".join(full_response)
-        )
+        save_message_to_pg(session_id, connection_string, "assistant", response_text)
+    return response_text, tools_used

@@ -1,67 +1,151 @@
 """
-MemOS — The Memory Operating System for AI
-An agentic chatbot with persistent memory, RAG, and web search.
-Built with LangGraph · Groq · ChromaDB · PostgreSQL · LangSmith
+MemOS — The Memory Operating System for AI.
+Agentic chatbot with persistent memory, RAG, and real-time web search.
+Stack: LangGraph · Groq · ChromaDB · PostgreSQL · LangSmith
 """
 
-import streamlit as st
+from __future__ import annotations
+
 import os
 import uuid
+
+import streamlit as st
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 
 load_dotenv()
 
-
-# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="MemOS",
-    page_icon="🧠",
+    page_icon="M",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+# Inject global CSS once
+st.markdown(
+    """
+    <style>
+    /* Tighten default Streamlit padding */
+    .block-container { padding-top: 0.75rem; padding-bottom: 1rem; }
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-def get_config() -> dict:
-    config = {}
-    try:
-        config["groq_api_key"] = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY"))
-        config["database_url"] = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL"))
-        config["langchain_api_key"] = st.secrets.get(
-            "LANGCHAIN_API_KEY", os.getenv("LANGCHAIN_API_KEY", "")
-        )
-    except Exception:
-        config["groq_api_key"] = os.getenv("GROQ_API_KEY")
-        config["database_url"] = os.getenv("DATABASE_URL")
-        config["langchain_api_key"] = os.getenv("LANGCHAIN_API_KEY", "")
+    /* Version badge */
+    .memos-badge {
+        display: inline-block;
+        background: #6C63FF;
+        color: #fff;
+        padding: 3px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+    }
 
-    # Push LangSmith vars into environment so agent.py picks them up
+    /* Sidebar section headers */
+    .sidebar-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #A0AEC0;
+        margin-bottom: 4px;
+    }
+
+    /* Tool-use indicator chips rendered above assistant responses */
+    .tool-chip {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(108,99,255,0.10);
+        border: 1px solid rgba(108,99,255,0.25);
+        color: #9B94FF;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+        margin: 0 6px 8px 0;
+        letter-spacing: 0.02em;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def get_config() -> dict[str, str]:
+    """
+    Resolve runtime configuration.
+    Priority: Streamlit secrets (production) > environment variables (local).
+    Also propagates LangSmith env vars before agent.py is imported.
+    """
+    def _get(key: str, default: str = "") -> str:
+        try:
+            return st.secrets.get(key, os.getenv(key, default)) or default
+        except Exception:
+            return os.getenv(key, default) or default
+
+    config = {
+        "groq_api_key": _get("GROQ_API_KEY"),
+        "database_url": _get("DATABASE_URL"),
+        "langchain_api_key": _get("LANGCHAIN_API_KEY"),
+    }
+
     if config["langchain_api_key"]:
         os.environ["LANGCHAIN_API_KEY"] = config["langchain_api_key"]
-        os.environ["LANGCHAIN_TRACING_V2"] = st.secrets.get(
-            "LANGCHAIN_TRACING_V2", os.getenv("LANGCHAIN_TRACING_V2", "true")
-        )
+        os.environ["LANGCHAIN_TRACING_V2"] = _get("LANGCHAIN_TRACING_V2", "true")
+        os.environ["LANGCHAIN_PROJECT"] = _get("LANGCHAIN_PROJECT", "memos")
+
     return config
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-def main():
+def _render_welcome() -> str | None:
+    """
+    Render the welcome card with clickable suggestion chips.
+    Returns the suggestion text if a chip was clicked, else None.
+    """
+    st.markdown(
+        """
+        <div style="
+            margin: 1.5rem auto 1rem;
+            max-width: 520px;
+            background: #1E2130;
+            border: 1px solid rgba(108,99,255,0.25);
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem 1rem;
+            text-align: center;
+        ">
+            <h3 style="margin: 0 0 0.3rem; font-size: 1.1rem;">Welcome to MemOS</h3>
+            <p style="color: #A0AEC0; font-size: 0.82rem; line-height: 1.4; margin: 0;">
+                Persistent memory &nbsp;·&nbsp; Web search &nbsp;·&nbsp; Document Q&amp;A
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    col1, col2, col3 = st.columns(3)
+    if col1.button("What is RAG?", use_container_width=True):
+        return "What is RAG?"
+    if col2.button("Latest AI news", use_container_width=True):
+        return "Search for the latest AI news"
+    if col3.button("What do you remember?", use_container_width=True):
+        return "What do you remember about me from past sessions?"
+    return None
+
+
+def main() -> None:
     config = get_config()
 
-    if not config.get("groq_api_key") or not config.get("database_url"):
-        st.error("Missing configuration")
+    if not config["groq_api_key"] or not config["database_url"]:
+        st.error("Missing required configuration.")
         st.info(
-            "**Local:** Copy `env.example` → `.env` and fill in values.\n\n"
-            "**Streamlit Cloud:** Add secrets in App Settings → Secrets."
+            "**Local development:** copy `env.example` to `.env` and fill in values.\n\n"
+            "**Streamlit Cloud:** add secrets under App Settings > Secrets."
         )
         st.stop()
 
-    # Lazy imports after config check (avoids slow model load on config error)
-    from agent import build_agent, stream_response, clear_session, get_pg_history
-    from rag.pipeline import ingest_uploaded_files, get_chunk_count
+    # Lazy imports — deferred so a config error surfaces before heavy model loading.
+    from agent import build_agent, clear_session, get_pg_history, run_response
+    from rag.pipeline import get_chunk_count, ingest_uploaded_files
 
-    # ── Session state ──────────────────────────────────────────────────────────
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
     if "messages" not in st.session_state:
@@ -69,139 +153,128 @@ def main():
 
     agent = build_agent(config["groq_api_key"])
 
-    # ── Header ─────────────────────────────────────────────────────────────────
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown("# 🧠 MemOS")
-        st.caption(
-            "Memory Operating System · Groq llama-3.3-70b · LangGraph · ChromaDB · PostgreSQL"
-        )
-    with col2:
-        st.markdown(
-            "<div style='text-align:right; padding-top:10px'>"
-            "<span style='background:#6C63FF;color:white;padding:4px 10px;"
-            "border-radius:12px;font-size:13px'>v2.0</span></div>",
-            unsafe_allow_html=True,
-        )
+    # ── Header ────────────────────────────────────────────────────────────────
+    st.markdown(
+        "<div style='display:flex;align-items:center;gap:10px;padding-bottom:2px'>"
+        "<span style='font-size:1.6rem;font-weight:700;line-height:1'>MemOS</span>"
+        "<span class='memos-badge'>v2.0</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Memory Operating System &nbsp;·&nbsp; llama-3.1-8b-instant &nbsp;·&nbsp; "
+        "LangGraph &nbsp;·&nbsp; ChromaDB &nbsp;·&nbsp; PostgreSQL",
+        unsafe_allow_html=True,
+    )
 
-    # ── Sidebar ────────────────────────────────────────────────────────────────
+    # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("## Session")
-        st.info(f"**ID:** `{st.session_state.session_id[:8]}...`")
-
-        # DB metrics
+        # Stats — only show on successful DB connection; show error otherwise
+        msgs: list = []
         try:
             history = get_pg_history(st.session_state.session_id, config["database_url"])
             msgs = history.messages
-            st.success("Database connected")
-            c1, c2 = st.columns(2)
-            c1.metric("Messages", len(msgs))
-            c2.metric("KB Chunks", get_chunk_count())
-        except Exception as e:
-            st.error(f"DB error: {e}")
-            msgs = []
+            col_msgs, col_chunks = st.columns(2)
+            col_msgs.metric("Messages", len(msgs))
+            col_chunks.metric("Chunks", get_chunk_count())
+        except Exception as exc:
+            st.error(f"Database: {exc}")
 
         st.divider()
 
-        # ── Knowledge Base upload ──────────────────────────────────────────────
-        st.markdown("### Knowledge Base")
+        # Knowledge Base
+        st.markdown("<p class='sidebar-label'>Knowledge Base</p>", unsafe_allow_html=True)
         uploaded = st.file_uploader(
-            "Upload documents (PDF, TXT, MD)",
+            "Upload documents",
             type=["pdf", "txt", "md"],
             accept_multiple_files=True,
             label_visibility="collapsed",
+            help="Upload PDF, TXT, or Markdown files to add them to the knowledge base.",
         )
-        if uploaded and st.button("Ingest Documents", use_container_width=True):
-            with st.spinner("Processing documents..."):
+        if uploaded and st.button("Ingest Documents", use_container_width=True, type="primary"):
+            with st.spinner("Chunking and embedding..."):
                 n = ingest_uploaded_files(uploaded)
-            st.success(f"Added {n} chunks to knowledge base")
+            st.success(f"Added {n} chunks.")
             st.rerun()
 
         st.divider()
 
-        # ── Memory viewer ──────────────────────────────────────────────────────
-        st.markdown("### Session Memory")
-        if msgs:
-            with st.expander("View history", expanded=False):
-                for i, msg in enumerate(msgs):
-                    role = "You" if isinstance(msg, HumanMessage) else "MemOS"
-                    st.caption(f"**{role}:** {msg.content[:120]}{'...' if len(msg.content) > 120 else ''}")
-                    if i < len(msgs) - 1:
-                        st.divider()
-        else:
-            st.caption("No messages yet.")
-
-        st.divider()
-
-        # ── Controls ───────────────────────────────────────────────────────────
-        if st.button("Clear Memory", use_container_width=True):
-            try:
-                clear_session(st.session_state.session_id, config["database_url"])
+        # Session controls
+        col_clear, col_new = st.columns(2)
+        with col_clear:
+            if st.button("Clear Memory", use_container_width=True):
+                try:
+                    clear_session(st.session_state.session_id, config["database_url"])
+                    st.session_state.messages = []
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+        with col_new:
+            if st.button("New Chat", use_container_width=True, type="primary"):
+                st.session_state.session_id = str(uuid.uuid4())
                 st.session_state.messages = []
                 st.rerun()
-            except Exception as e:
-                st.error(str(e))
 
-        if st.button("New Session", type="primary", use_container_width=True):
-            st.session_state.session_id = str(uuid.uuid4())
-            st.session_state.messages = []
-            st.rerun()
+        # Conversation history — collapsed, for power users
+        if msgs:
+            st.divider()
+            with st.expander(f"History ({len(msgs)} messages)"):
+                for i, msg in enumerate(msgs):
+                    role = "You" if isinstance(msg, HumanMessage) else "MemOS"
+                    preview = msg.content[:120] + ("..." if len(msg.content) > 120 else "")
+                    st.caption(f"**{role}:** {preview}")
+                    if i < len(msgs) - 1:
+                        st.divider()
 
-        st.divider()
+    # ── Chat area ─────────────────────────────────────────────────────────────
+    _TOOL_LABELS: dict[str, str] = {
+        "search_web": "Web Search",
+        "retrieve_from_documents": "Knowledge Base",
+    }
 
-        # ── Settings / Observability ───────────────────────────────────────────
-        with st.expander("Settings"):
-            st.caption("**Model:** llama-3.3-70b-versatile")
-            st.caption("**Embeddings:** all-MiniLM-L6-v2 (local)")
-            st.caption("**Vector DB:** ChromaDB (local)")
-            st.caption("**Memory DB:** PostgreSQL")
-            env = "Production" if os.getenv("STREAMLIT_SHARING_MODE") else "Local"
-            st.caption(f"**Environment:** {env}")
+    # Welcome screen with clickable suggestion chips (shown only when no messages)
+    prompt_from_chip: str | None = None
+    if not st.session_state.messages:
+        prompt_from_chip = _render_welcome()
 
-        with st.expander("Observability"):
-            if config.get("langchain_api_key"):
-                st.success("LangSmith tracing active")
-                st.markdown("[View Traces ↗](https://smith.langchain.com)")
-            else:
-                st.info("Add `LANGCHAIN_API_KEY` to enable LangSmith tracing.")
-
-    # ── Chat messages ──────────────────────────────────────────────────────────
+    # Render existing conversation history
     for message in st.session_state.messages:
-        with st.chat_message(message["role"], avatar="🧠" if message["role"] == "assistant" else None):
+        with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # ── Chat input ─────────────────────────────────────────────────────────────
-    if prompt := st.chat_input("Ask anything — I remember everything..."):
+    # ── Input ─────────────────────────────────────────────────────────────────
+    if prompt := (prompt_from_chip or st.chat_input("Ask anything — I remember everything...")):
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        with st.chat_message("assistant", avatar="🧠"):
+        with st.chat_message("assistant"):
             try:
-                response_text = st.write_stream(
-                    stream_response(
+                with st.spinner(""):
+                    response_text, tools_used = run_response(
                         agent,
                         prompt,
                         st.session_state.session_id,
                         config["database_url"],
                     )
+            except Exception as exc:
+                st.error(f"Error generating response: {exc}")
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": f"Error: {exc}"}
                 )
+            else:
+                # Show which tools were used (deduplicated, known tools only)
+                chips = "".join(
+                    f"<span class='tool-chip'>{_TOOL_LABELS[t]}</span>"
+                    for t in dict.fromkeys(tools_used)
+                    if t in _TOOL_LABELS
+                )
+                if chips:
+                    st.markdown(chips, unsafe_allow_html=True)
+                st.markdown(response_text or "_No response generated._")
                 st.session_state.messages.append(
                     {"role": "assistant", "content": response_text}
                 )
-            except Exception as e:
-                err = f"Error: {e}"
-                st.error(err)
-                st.session_state.messages.append({"role": "assistant", "content": err})
-
-    # ── Footer ─────────────────────────────────────────────────────────────────
-    st.divider()
-    st.caption(
-        "MemOS remembers every conversation across sessions. "
-        "Ask it to search the web or query your uploaded documents. "
-        "Powered by [Groq](https://groq.com) · [LangGraph](https://langchain-ai.github.io/langgraph/) · "
-        "[ChromaDB](https://www.trychroma.com) · [LangSmith](https://smith.langchain.com)"
-    )
 
 
 if __name__ == "__main__":
