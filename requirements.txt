@@ -16,6 +16,8 @@ sqlalchemy>=2.0.40
 # Observability
 langsmith>=0.2.0
 
+langchain-text-splitters>=0.3.0
+
 # RAG
 chromadb>=0.6.3
 sentence-transformers>=3.4.1

@@ -9,7 +9,7 @@ from pathlib import Path
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 CHROMA_DIR = Path(__file__).parent.parent / "chroma_db"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
