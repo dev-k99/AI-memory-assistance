@@ -4,951 +4,207 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MemOS — The Memory Operating System for AI</title>
-  <meta name="description" content="An agentic AI assistant with persistent memory, RAG, web search, and full observability. Built on a zero-cost stack." />
-
-  <!-- Open Graph -->
-  <meta property="og:title" content="MemOS — Memory Operating System for AI" />
-  <meta property="og:description" content="Agentic RAG chatbot with LangGraph, ChromaDB, PostgreSQL, and LangSmith. Zero cost." />
-  <meta property="og:type" content="website" />
-
   <style>
-    /* ── Reset & Base ─────────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0E1117;
-      --bg2: #1E2130;
-      --bg3: #262B3D;
-      --accent: #6C63FF;
-      --accent2: #9B94FF;
-      --text: #FAFAFA;
-      --muted: #A0AEC0;
-      --green: #48BB78;
-      --orange: #F6AD55;
-      --pink: #FC8181;
-      --border: rgba(108, 99, 255, 0.25);
-      --radius: 12px;
-    }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-
-    a { color: var(--accent2); text-decoration: none; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0E1117; color: #FAFAFA; line-height: 1.6; }
+    a { color: #9B94FF; text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    /* ── Noise texture overlay ────────────────────────────────────────────── */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* ── Nav ──────────────────────────────────────────────────────────────── */
     nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(14,17,23,0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 60px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.25rem 2rem; border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: sticky; top: 0; background: rgba(14,17,23,0.92);
+      backdrop-filter: blur(8px); z-index: 100;
     }
+    .nav-logo { font-size: 1.1rem; font-weight: 700; color: #fff; }
+    .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
+    .nav-links a { color: #A0AEC0; }
+    .nav-links a:hover { color: #fff; text-decoration: none; }
 
-    .nav-logo {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .nav-logo span { color: var(--accent2); }
-
-    .nav-links {
-      display: flex;
-      gap: 1.5rem;
-      list-style: none;
-    }
-
-    .nav-links a {
-      color: var(--muted);
-      font-size: 0.9rem;
-      transition: color 0.2s;
-    }
-
-    .nav-links a:hover { color: var(--text); text-decoration: none; }
-
-    /* ── Layout ───────────────────────────────────────────────────────────── */
-    .container {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-      position: relative;
-      z-index: 1;
-    }
-
-    section { padding: 80px 0; }
-
-    h2 {
-      font-size: 2rem;
-      font-weight: 700;
-      text-align: center;
-      margin-bottom: 0.5rem;
-    }
-
-    .section-sub {
-      text-align: center;
-      color: var(--muted);
-      margin-bottom: 3rem;
-      font-size: 1.05rem;
-    }
-
-    /* ── Hero ─────────────────────────────────────────────────────────────── */
-    #hero {
-      min-height: 90vh;
-      display: flex;
-      align-items: center;
-      padding: 100px 0 60px;
-      position: relative;
-    }
-
-    /* Glow blob */
-    #hero::after {
-      content: '';
-      position: absolute;
-      top: 10%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 700px;
-      height: 500px;
-      background: radial-gradient(ellipse, rgba(108,99,255,0.18) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .hero-inner {
-      text-align: center;
-      position: relative;
-      z-index: 1;
-      width: 100%;
-    }
-
-    .hero-badge {
-      display: inline-block;
-      background: rgba(108,99,255,0.15);
-      border: 1px solid var(--border);
-      color: var(--accent2);
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      margin-bottom: 1.5rem;
-      text-transform: uppercase;
-    }
-
-    .hero-title {
-      font-size: clamp(3rem, 8vw, 6rem);
-      font-weight: 800;
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-      margin-bottom: 0.5rem;
-    }
-
-    .hero-title .accent { color: var(--accent2); }
-
-    .hero-subtitle {
-      font-size: 1.5rem;
-      font-weight: 300;
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-    }
-
-    .hero-desc {
-      font-size: 1.1rem;
-      color: var(--muted);
-      max-width: 620px;
-      margin: 0 auto 2.5rem;
-    }
-
-    .hero-cta {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-    }
-
-    .btn-primary:hover {
-      background: var(--accent2);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(108,99,255,0.4);
-      text-decoration: none;
-      color: #fff;
-    }
-
-    .btn-secondary {
-      background: var(--bg3);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .btn-secondary:hover {
-      background: var(--bg2);
-      transform: translateY(-2px);
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    /* ── Badges row ───────────────────────────────────────────────────────── */
-    .badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin-top: 3rem;
-    }
-
+    .hero { text-align: center; padding: 6rem 1.5rem 4rem; max-width: 720px; margin: 0 auto; }
     .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      border: 1px solid;
+      display: inline-block; background: rgba(108,99,255,0.15);
+      border: 1px solid rgba(108,99,255,0.35); color: #9B94FF;
+      padding: 4px 14px; border-radius: 20px; font-size: 0.78rem;
+      font-weight: 600; letter-spacing: 0.05em; margin-bottom: 1.5rem;
     }
-
-    .badge-purple { background: rgba(108,99,255,0.12); border-color: rgba(108,99,255,0.4); color: var(--accent2); }
-    .badge-green  { background: rgba(72,187,120,0.12); border-color: rgba(72,187,120,0.4); color: #68D391; }
-    .badge-orange { background: rgba(246,173,85,0.12); border-color: rgba(246,173,85,0.4); color: var(--orange); }
-    .badge-blue   { background: rgba(0,180,216,0.12); border-color: rgba(0,180,216,0.4); color: #63B3ED; }
-    .badge-pink   { background: rgba(252,129,129,0.12); border-color: rgba(252,129,129,0.4); color: var(--pink); }
-
-    /* ── Stats row ────────────────────────────────────────────────────────── */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1.5rem;
-      margin: 4rem 0 0;
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.15; margin-bottom: 1rem;
+      background: linear-gradient(135deg, #fff 40%, #9B94FF);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
+    .hero p { font-size: 1.1rem; color: #A0AEC0; max-width: 520px; margin: 0 auto 2.5rem; }
+    .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn { padding: 0.75rem 1.75rem; border-radius: 8px; font-size: 0.95rem; font-weight: 600; transition: opacity 0.15s; }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-primary { background: #6C63FF; color: #fff; }
+    .btn-secondary { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
 
-    .stat-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.5rem 1rem;
+    section { padding: 4rem 1.5rem; }
+    .section-inner { max-width: 1000px; margin: 0 auto; }
+    .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #6C63FF; margin-bottom: 0.75rem; }
+    .section-title { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 700; margin-bottom: 0.75rem; }
+    .section-sub { color: #A0AEC0; max-width: 560px; margin-bottom: 3rem; }
+
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1.25rem; }
+    .feature-card { background: #1E2130; border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 1.5rem; transition: border-color 0.2s; }
+    .feature-card:hover { border-color: rgba(108,99,255,0.4); }
+    .feature-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+    .feature-title { font-weight: 600; margin-bottom: 0.4rem; }
+    .feature-desc { font-size: 0.9rem; color: #A0AEC0; }
+
+    .stack-chips { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
+    .chip { background: #1E2130; border: 1px solid rgba(255,255,255,0.08); padding: 6px 16px; border-radius: 20px; font-size: 0.85rem; color: #CBD5E0; }
+
+    .arch-box {
+      background: #1E2130; border: 1px solid rgba(108,99,255,0.2); border-radius: 14px;
+      padding: 2rem; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem;
+      color: #A0AEC0; white-space: pre; overflow-x: auto; line-height: 1.7;
+    }
+    .arch-highlight { color: #9B94FF; }
+
+    .cta-banner {
       text-align: center;
+      background: linear-gradient(135deg, rgba(108,99,255,0.15), rgba(108,99,255,0.05));
+      border: 1px solid rgba(108,99,255,0.25); border-radius: 16px; padding: 3rem 2rem;
     }
+    .cta-banner h2 { font-size: 1.8rem; margin-bottom: 0.75rem; }
+    .cta-banner p { color: #A0AEC0; margin-bottom: 2rem; }
 
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--accent2);
-      display: block;
-    }
+    footer { text-align: center; padding: 2rem; color: #4A5568; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.06); }
 
-    .stat-label {
-      font-size: 0.85rem;
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
-    /* ── Features ─────────────────────────────────────────────────────────── */
-    #features { background: var(--bg); }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
-    }
-
-    .feature-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 2rem;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-
-    .feature-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-4px);
-    }
-
-    .feature-icon {
-      width: 48px;
-      height: 48px;
-      background: rgba(108,99,255,0.15);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .feature-card h3 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-
-    .feature-card p {
-      color: var(--muted);
-      font-size: 0.95rem;
-      line-height: 1.6;
-    }
-
-    .feature-tag {
-      display: inline-block;
-      margin-top: 0.75rem;
-      font-size: 0.75rem;
-      color: var(--accent2);
-      background: rgba(108,99,255,0.1);
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-
-    /* ── Architecture ─────────────────────────────────────────────────────── */
-    #architecture { background: var(--bg); }
-
-    .arch-diagram {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 2.5rem;
-      overflow-x: auto;
-    }
-
-    .arch-flow {
-      display: flex;
-      align-items: stretch;
-      gap: 0;
-      min-width: 700px;
-      flex-wrap: nowrap;
-      justify-content: center;
-    }
-
-    .arch-node {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem 1.2rem;
-      text-align: center;
-      min-width: 120px;
-      flex-shrink: 0;
-    }
-
-    .arch-node-label {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .arch-node-sub {
-      font-size: 0.7rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    .arch-arrow {
-      display: flex;
-      align-items: center;
-      padding: 0 8px;
-      color: var(--muted);
-      font-size: 1.2rem;
-      flex-shrink: 0;
-    }
-
-    .arch-branch {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      justify-content: center;
-    }
-
-    .arch-branch-node {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.6rem 1rem;
-      text-align: center;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--accent2);
-      white-space: nowrap;
-    }
-
-    .arch-note {
-      text-align: center;
-      margin-top: 1.5rem;
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-
-    /* ── Tech Stack ───────────────────────────────────────────────────────── */
-    #stack { background: var(--bg); }
-
-    .stack-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
-    }
-
-    .stack-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .stack-icon {
-      font-size: 1.75rem;
-      flex-shrink: 0;
-    }
-
-    .stack-name {
-      font-weight: 700;
-      font-size: 0.95rem;
-    }
-
-    .stack-role {
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-
-    .stack-cost {
-      margin-left: auto;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--green);
-      background: rgba(72,187,120,0.1);
-      padding: 2px 8px;
-      border-radius: 4px;
-      flex-shrink: 0;
-    }
-
-    /* ── Demo section ─────────────────────────────────────────────────────── */
-    #demo { background: var(--bg); }
-
-    .demo-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-
-    .demo-bar {
-      background: var(--bg3);
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .demo-dot { width: 12px; height: 12px; border-radius: 50%; }
-    .dot-red    { background: #FC8181; }
-    .dot-yellow { background: #F6E05E; }
-    .dot-green  { background: #68D391; }
-
-    .demo-title {
-      margin-left: 8px;
-      font-size: 0.85rem;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    .demo-body { padding: 1.5rem; }
-
-    .demo-msg {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 1.25rem;
-      align-items: flex-start;
-    }
-
-    .demo-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1rem;
-      flex-shrink: 0;
-    }
-
-    .avatar-user { background: rgba(108,99,255,0.2); }
-    .avatar-ai   { background: rgba(72,187,120,0.2); }
-
-    .demo-bubble {
-      background: var(--bg3);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 0.9rem;
-      max-width: 520px;
-    }
-
-    .demo-bubble.user { border: 1px solid rgba(108,99,255,0.2); }
-    .demo-bubble.ai   { border: 1px solid rgba(72,187,120,0.2); }
-
-    .tool-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(246,173,85,0.12);
-      border: 1px solid rgba(246,173,85,0.3);
-      color: var(--orange);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      margin: 4px 0;
-    }
-
-    /* ── CTA ──────────────────────────────────────────────────────────────── */
-    #cta {
-      background: linear-gradient(135deg, rgba(108,99,255,0.12) 0%, rgba(14,17,23,1) 60%);
-      border-top: 1px solid var(--border);
-      text-align: center;
-    }
-
-    #cta h2 { font-size: 2.5rem; }
-
-    #cta p {
-      color: var(--muted);
-      max-width: 500px;
-      margin: 1rem auto 2rem;
-    }
-
-    /* ── Footer ───────────────────────────────────────────────────────────── */
-    footer {
-      background: var(--bg);
-      border-top: 1px solid var(--border);
-      padding: 2rem;
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-
-    footer a { color: var(--accent2); }
-
-    /* ── Responsive ───────────────────────────────────────────────────────── */
-    @media (max-width: 640px) {
-      .nav-links { display: none; }
-      .hero-title { font-size: 3rem; }
-      .arch-flow { justify-content: flex-start; }
+    @media (max-width: 600px) {
+      nav { padding: 1rem; }
+      .nav-links { gap: 1rem; font-size: 0.82rem; }
+      .hero { padding: 4rem 1rem 3rem; }
     }
   </style>
 </head>
 <body>
 
-<!-- ── Navigation ──────────────────────────────────────────────────────────── -->
 <nav>
-  <div class="nav-logo">🧠 Mem<span>OS</span></div>
-  <ul class="nav-links">
-    <li><a href="#features">Features</a></li>
-    <li><a href="#architecture">Architecture</a></li>
-    <li><a href="#stack">Stack</a></li>
-    <li><a href="#demo">Demo</a></li>
-  </ul>
-  <a href="https://github.com/dev-k99/MemOS" class="btn btn-secondary" style="padding:8px 18px;font-size:0.9rem">
-    ⭐ GitHub
-  </a>
+  <span class="nav-logo">MemOS</span>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#architecture">How it works</a>
+    <a href="https://github.com/dev-k99/MemOS">GitHub</a>
+  </div>
 </nav>
 
-<!-- ── Hero ────────────────────────────────────────────────────────────────── -->
-<section id="hero">
-  <div class="container">
-    <div class="hero-inner">
-      <div class="hero-badge">AI Engineer Portfolio Project</div>
-
-      <h1 class="hero-title">Mem<span class="accent">OS</span></h1>
-      <p class="hero-subtitle">The Memory Operating System for AI</p>
-      <p class="hero-desc">
-        An agentic AI assistant that remembers every conversation, searches the web,
-        and queries your documents — all on a zero-cost stack.
-      </p>
-
-      <div class="hero-cta">
-        <a href="https://github.com/dev-k99/MemOS" class="btn btn-primary">
-          🚀 Live Demo
-        </a>
-        <a href="https://github.com/dev-k99/MemOS" class="btn btn-secondary">
-          📂 View Source
-        </a>
-      </div>
-
-      <div class="badges">
-        <span class="badge badge-purple">LangGraph Agent</span>
-        <span class="badge badge-blue">RAG · ChromaDB</span>
-        <span class="badge badge-orange">Groq llama-3.3-70b</span>
-        <span class="badge badge-green">PostgreSQL Memory</span>
-        <span class="badge badge-purple">LangSmith Traced</span>
-        <span class="badge badge-pink">Streaming</span>
-        <span class="badge badge-green">$0/month</span>
-      </div>
-
-      <div class="stats container">
-        <div class="stat-card">
-          <span class="stat-value">70B</span>
-          <span class="stat-label">Parameter LLM (Groq free)</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value">3</span>
-          <span class="stat-label">Agent Tools</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value">∞</span>
-          <span class="stat-label">Session Memory</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value">$0</span>
-          <span class="stat-label">Monthly Cost</span>
-        </div>
-      </div>
-    </div>
+<div class="hero">
+  <div class="badge">AI Engineering Portfolio Project</div>
+  <h1>The Memory Operating System for AI</h1>
+  <p>An agentic AI assistant that remembers every conversation, searches the web in real time, and answers questions about your documents.</p>
+  <div class="cta-group">
+    <a href="https://memos-v2-1.streamlit.app" class="btn btn-primary">Live Demo</a>
+    <a href="https://github.com/dev-k99/MemOS" class="btn btn-secondary">View on GitHub</a>
   </div>
-</section>
+</div>
 
-<!-- ── Features ────────────────────────────────────────────────────────────── -->
-<section id="features">
-  <div class="container">
-    <h2>Built for AI Engineer Roles</h2>
-    <p class="section-sub">Every feature maps to a skill companies screen for</p>
-
+<section id="features" style="background:#0E1117;">
+  <div class="section-inner">
+    <p class="section-label">Capabilities</p>
+    <h2 class="section-title">Built to demonstrate real AI engineering skills</h2>
+    <p class="section-sub">Every feature maps directly to what enterprise AI roles require.</p>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">🗄️</div>
-        <h3>Persistent Long-Term Memory</h3>
-        <p>Every conversation stored in PostgreSQL with JSONB message format, triggers for session tracking, and composite indexes. Survives restarts, deployments, and device changes.</p>
-        <span class="feature-tag">SQLChatMessageHistory · Supabase</span>
+        <div class="feature-title">Persistent Memory</div>
+        <div class="feature-desc">Every conversation stored in PostgreSQL. Start a new session days later — the agent remembers.</div>
       </div>
-
       <div class="feature-card">
-        <div class="feature-icon">📚</div>
-        <h3>RAG — Knowledge Base Search</h3>
-        <p>Upload PDF, TXT, or Markdown files. Documents are chunked, embedded with <code>all-MiniLM-L6-v2</code>, and stored in ChromaDB. The agent retrieves top-k chunks before answering.</p>
-        <span class="feature-tag">ChromaDB · sentence-transformers · LangChain</span>
+        <div class="feature-icon">🔍</div>
+        <div class="feature-title">Web Search</div>
+        <div class="feature-desc">Tavily integration gives real-time access to current events, news, and anything outside training data.</div>
       </div>
-
+      <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <div class="feature-title">Document Q&amp;A (RAG)</div>
+        <div class="feature-desc">Upload PDF, TXT, or Markdown files. ChromaDB + sentence-transformers retrieves the most relevant chunks before every response.</div>
+      </div>
       <div class="feature-card">
         <div class="feature-icon">🤖</div>
-        <h3>LangGraph ReAct Agent</h3>
-        <p>A stateful graph-based agent that reasons step-by-step and decides which tool to use. Built with LangGraph's <code>create_react_agent</code> and a <code>MemorySaver</code> checkpointer.</p>
-        <span class="feature-tag">LangGraph · ReAct · Tool Calling</span>
+        <div class="feature-title">Custom LangGraph Agent</div>
+        <div class="feature-desc">Built with StateGraph and ToolNode — not create_react_agent — for full control over tool binding and message flow.</div>
       </div>
-
       <div class="feature-card">
-        <div class="feature-icon">🌐</div>
-        <h3>Real-Time Web Search</h3>
-        <p>DuckDuckGo search tool requires no API key. The agent automatically searches the web when it needs current information not in its training data or knowledge base.</p>
-        <span class="feature-tag">duckduckgo-search · Function Calling</span>
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">LangSmith Observability</div>
+        <div class="feature-desc">Every agent invocation traced: tool calls, token usage, latency. Full production-grade observability.</div>
       </div>
-
       <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>Streaming Responses</h3>
-        <p>Tokens stream progressively to the UI using Groq's streaming API and Streamlit's <code>st.write_stream()</code>. No waiting for the full response — instant feedback.</p>
-        <span class="feature-tag">Groq Streaming · st.write_stream</span>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🔬</div>
-        <h3>LangSmith Observability</h3>
-        <p>Every agent invocation auto-traced in LangSmith. Full trace trees showing tool calls, token counts, latency, and LLM inputs/outputs. Production MLOps in 5 lines of code.</p>
-        <span class="feature-tag">LangSmith · MLOps · Tracing</span>
+        <div class="feature-icon">💸</div>
+        <div class="feature-title">Zero Cost Stack</div>
+        <div class="feature-desc">Groq, Neon, ChromaDB, Streamlit Cloud, Tavily — all free tier. $0/month to run.</div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── Architecture ─────────────────────────────────────────────────────────── -->
-<section id="architecture">
-  <div class="container">
-    <h2>Architecture</h2>
-    <p class="section-sub">How the components fit together</p>
+<section id="architecture" style="background:#080B10;">
+  <div class="section-inner">
+    <p class="section-label">Architecture</p>
+    <h2 class="section-title">How it works</h2>
+    <p class="section-sub" style="margin-bottom:2rem;">Each message triggers a full agentic loop: memory load, RAG retrieval, LLM reasoning, optional tool call, and persistence.</p>
+    <div class="arch-box"><span class="arch-highlight">User Input</span>
+    │
+    ├── RAG: retrieve_context(query) ──► ChromaDB ──► all-MiniLM-L6-v2
+    │         (always runs, injected into system message)
+    │
+    ▼
+<span class="arch-highlight">LangGraph StateGraph</span>
+    │
+    ├── agent_node ──► ChatGroq (llama-3.1-8b-instant)
+    │                       │
+    │              tool_calls? ──► ToolNode ──► search_web (Tavily)
+    │                       │
+    │              final response
+    │
+    ▼
+<span class="arch-highlight">PostgreSQL (Neon)</span> ──► persist exchange
+    │
+    ▼
+<span class="arch-highlight">LangSmith</span> ──► trace every invocation</div>
+  </div>
+</section>
 
-    <div class="arch-diagram">
-      <div class="arch-flow">
-        <!-- User -->
-        <div class="arch-node">
-          <div class="arch-node-label">👤 User</div>
-          <div class="arch-node-sub">Streamlit UI</div>
-        </div>
-
-        <div class="arch-arrow">→</div>
-
-        <!-- Agent -->
-        <div class="arch-node" style="border-color:rgba(108,99,255,0.6); background:rgba(108,99,255,0.1)">
-          <div class="arch-node-label" style="color:var(--accent2)">🤖 LangGraph</div>
-          <div class="arch-node-sub">ReAct Agent</div>
-        </div>
-
-        <div class="arch-arrow">→</div>
-
-        <!-- Tool router -->
-        <div class="arch-branch">
-          <div class="arch-branch-node">🌐 DuckDuckGo Search</div>
-          <div class="arch-branch-node">📚 RAG Retrieval</div>
-          <div class="arch-branch-node">💬 Direct Answer</div>
-        </div>
-
-        <div class="arch-arrow">→</div>
-
-        <!-- Groq -->
-        <div class="arch-node" style="border-color:rgba(246,173,85,0.5); background:rgba(246,173,85,0.08)">
-          <div class="arch-node-label" style="color:var(--orange)">⚡ Groq</div>
-          <div class="arch-node-sub">llama-3.3-70b</div>
-        </div>
-
-        <div class="arch-arrow">→</div>
-
-        <!-- Response -->
-        <div class="arch-node" style="border-color:rgba(72,187,120,0.5); background:rgba(72,187,120,0.08)">
-          <div class="arch-node-label" style="color:#68D391">📡 Stream</div>
-          <div class="arch-node-sub">st.write_stream</div>
-        </div>
-      </div>
-
-      <!-- Storage row -->
-      <div style="display:flex; justify-content:center; gap:2rem; margin-top:1.5rem; flex-wrap:wrap;">
-        <div class="arch-node" style="min-width:140px; border-color:rgba(99,179,237,0.4)">
-          <div class="arch-node-label" style="color:#63B3ED">🗄️ PostgreSQL</div>
-          <div class="arch-node-sub">Supabase Memory</div>
-        </div>
-        <div class="arch-node" style="min-width:140px; border-color:rgba(0,180,216,0.4)">
-          <div class="arch-node-label" style="color:#63B3ED">🔵 ChromaDB</div>
-          <div class="arch-node-sub">Vector Store</div>
-        </div>
-        <div class="arch-node" style="min-width:140px; border-color:rgba(139,92,246,0.4)">
-          <div class="arch-node-label" style="color:#A78BFA">🔬 LangSmith</div>
-          <div class="arch-node-sub">Tracing</div>
-        </div>
-      </div>
-
-      <p class="arch-note">All components run on free tiers — $0/month total</p>
+<section style="background:#0E1117;">
+  <div class="section-inner">
+    <p class="section-label">Tech Stack</p>
+    <h2 class="section-title">Built with production-grade tools</h2>
+    <div class="stack-chips">
+      <span class="chip">LangGraph</span>
+      <span class="chip">LangChain</span>
+      <span class="chip">Groq</span>
+      <span class="chip">ChromaDB</span>
+      <span class="chip">PostgreSQL</span>
+      <span class="chip">Neon</span>
+      <span class="chip">Tavily</span>
+      <span class="chip">sentence-transformers</span>
+      <span class="chip">LangSmith</span>
+      <span class="chip">Streamlit</span>
+      <span class="chip">Python 3.11</span>
     </div>
   </div>
 </section>
 
-<!-- ── Tech Stack ───────────────────────────────────────────────────────────── -->
-<section id="stack">
-  <div class="container">
-    <h2>Tech Stack</h2>
-    <p class="section-sub">Every tool chosen for a reason, every tool free</p>
-
-    <div class="stack-grid">
-      <div class="stack-card">
-        <span class="stack-icon">⚡</span>
-        <div>
-          <div class="stack-name">Groq</div>
-          <div class="stack-role">LLM inference — llama-3.3-70b</div>
-        </div>
-        <span class="stack-cost">Free</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🕸️</span>
-        <div>
-          <div class="stack-name">LangGraph</div>
-          <div class="stack-role">ReAct agent framework</div>
-        </div>
-        <span class="stack-cost">OSS</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🔵</span>
-        <div>
-          <div class="stack-name">ChromaDB</div>
-          <div class="stack-role">Vector store for RAG</div>
-        </div>
-        <span class="stack-cost">OSS</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🤗</span>
-        <div>
-          <div class="stack-name">sentence-transformers</div>
-          <div class="stack-role">Local embeddings (all-MiniLM-L6-v2)</div>
-        </div>
-        <span class="stack-cost">OSS</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🐘</span>
-        <div>
-          <div class="stack-name">PostgreSQL · Supabase</div>
-          <div class="stack-role">Persistent conversation memory</div>
-        </div>
-        <span class="stack-cost">Free</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🔬</span>
-        <div>
-          <div class="stack-name">LangSmith</div>
-          <div class="stack-role">Agent observability &amp; tracing</div>
-        </div>
-        <span class="stack-cost">Free</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🎈</span>
-        <div>
-          <div class="stack-name">Streamlit</div>
-          <div class="stack-role">Frontend + cloud hosting</div>
-        </div>
-        <span class="stack-cost">Free</span>
-      </div>
-
-      <div class="stack-card">
-        <span class="stack-icon">🌐</span>
-        <div>
-          <div class="stack-name">DuckDuckGo Search</div>
-          <div class="stack-role">Web search (no API key)</div>
-        </div>
-        <span class="stack-cost">Free</span>
+<section style="background:#080B10;">
+  <div class="section-inner">
+    <div class="cta-banner">
+      <h2>See it in action</h2>
+      <p>Try the live demo — ask it to search the web, query the knowledge base, or test its memory across sessions.</p>
+      <div class="cta-group">
+        <a href="https://memos-v2-1.streamlit.app" class="btn btn-primary">Open Live Demo</a>
+        <a href="https://github.com/dev-k99/MemOS" class="btn btn-secondary">View Source</a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── Demo ──────────────────────────────────────────────────────────────────── -->
-<section id="demo">
-  <div class="container">
-    <h2>See It In Action</h2>
-    <p class="section-sub">A real conversation demonstrating all capabilities</p>
-
-    <div class="demo-card">
-      <div class="demo-bar">
-        <div class="demo-dot dot-red"></div>
-        <div class="demo-dot dot-yellow"></div>
-        <div class="demo-dot dot-green"></div>
-        <span class="demo-title">MemOS — localhost:8501</span>
-      </div>
-      <div class="demo-body">
-
-        <div class="demo-msg">
-          <div class="demo-avatar avatar-user">👤</div>
-          <div class="demo-bubble user">What is RAG and how does it work?</div>
-        </div>
-
-        <div class="demo-msg">
-          <div class="demo-avatar avatar-ai">🧠</div>
-          <div class="demo-bubble ai">
-            <div class="tool-chip">📚 retrieve_from_documents("RAG")</div>
-            <br/>
-            RAG (Retrieval Augmented Generation) grounds LLM responses in external knowledge.
-            The pipeline has 5 steps: <strong>Ingest → Embed → Store → Retrieve → Generate</strong>.
-            Your documents are split into 500-token chunks, embedded using <code>all-MiniLM-L6-v2</code>,
-            stored in ChromaDB, and retrieved via similarity search at query time...
-          </div>
-        </div>
-
-        <div class="demo-msg">
-          <div class="demo-avatar avatar-user">👤</div>
-          <div class="demo-bubble user">Search for the latest Groq news</div>
-        </div>
-
-        <div class="demo-msg">
-          <div class="demo-avatar avatar-ai">🧠</div>
-          <div class="demo-bubble ai">
-            <div class="tool-chip">🌐 search_web("Groq latest news 2026")</div>
-            <br/>
-            Here's what I found from the web: Groq recently announced <strong>llama-3.3-70b-versatile</strong>
-            as their flagship free model with 128k context window, achieving ~750 tokens/second
-            throughput on their LPU hardware...
-          </div>
-        </div>
-
-        <div class="demo-msg">
-          <div class="demo-avatar avatar-user">👤</div>
-          <div class="demo-bubble user">What was my first question in this session?</div>
-        </div>
-
-        <div class="demo-msg">
-          <div class="demo-avatar avatar-ai">🧠</div>
-          <div class="demo-bubble ai">
-            Your first question in this session was: <em>"What is RAG and how does it work?"</em>
-            — I remember it because our entire conversation is stored in PostgreSQL.
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── CTA ───────────────────────────────────────────────────────────────────── -->
-<section id="cta">
-  <div class="container">
-    <h2>Try MemOS</h2>
-    <p>Deploy your own instance in minutes using free-tier services. Zero credit card required.</p>
-    <div class="hero-cta">
-      <a href="https://github.com/dev-k99/MemOS" class="btn btn-primary">
-        🚀 Live Demo
-      </a>
-      <a href="https://github.com/dev-k99/MemOS" class="btn btn-secondary">
-        📂 View on GitHub
-      </a>
-    </div>
-  </div>
-</section>
-
-<!-- ── Footer ────────────────────────────────────────────────────────────────── -->
 <footer>
-  <p>
-    <strong>MemOS</strong> — Built by <a href="https://github.com/dev-k99">Kwanele</a> ·
-    <a href="https://github.com/dev-k99/MemOS">GitHub</a> ·
-    MIT License
-  </p>
-  <p style="margin-top:6px">
-    Powered by
-    <a href="https://groq.com">Groq</a> ·
-    <a href="https://langchain-ai.github.io/langgraph/">LangGraph</a> ·
-    <a href="https://www.trychroma.com">ChromaDB</a> ·
-    <a href="https://streamlit.io">Streamlit</a> ·
-    <a href="https://smith.langchain.com">LangSmith</a>
-  </p>
+  Built by <a href="https://github.com/dev-k99">dev-k99</a> &nbsp;·&nbsp;
+  <a href="https://github.com/dev-k99/MemOS">GitHub</a> &nbsp;·&nbsp;
+  MIT License
 </footer>
 
 </body>

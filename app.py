@@ -15,6 +15,11 @@ from langchain_core.messages import HumanMessage
 
 load_dotenv()
 
+_TOOL_LABELS: dict[str, str] = {
+    "search_web": "Web Search",
+    "retrieve_from_documents": "Knowledge Base",
+}
+
 st.set_page_config(
     page_title="MemOS",
     page_icon="M",
@@ -148,7 +153,7 @@ def main() -> None:
 
     # Lazy imports — deferred so a config error surfaces before heavy model loading.
     from agent import build_agent, clear_session, get_pg_history, run_response
-    from rag.pipeline import get_chunk_count, ingest_uploaded_files
+    from rag.pipeline import ingest_uploaded_files
 
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
@@ -173,14 +178,11 @@ def main() -> None:
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
-        # Stats — only show on successful DB connection; show error otherwise
+        # Load session history — only surface errors, not counts
         msgs: list = []
         try:
             history = get_pg_history(st.session_state.session_id, config["database_url"])
             msgs = history.messages
-            col_msgs, col_chunks = st.columns(2)
-            col_msgs.metric("Messages", len(msgs))
-            col_chunks.metric("Chunks", get_chunk_count())
         except Exception as exc:
             st.error(f"Database: {exc}")
 
@@ -231,10 +233,6 @@ def main() -> None:
                         st.divider()
 
     # ── Chat area ─────────────────────────────────────────────────────────────
-    _TOOL_LABELS: dict[str, str] = {
-        "search_web": "Web Search",
-        "retrieve_from_documents": "Knowledge Base",
-    }
 
     # Welcome screen with clickable suggestion chips (shown only when no messages)
     prompt_from_chip: str | None = None
