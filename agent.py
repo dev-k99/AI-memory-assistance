@@ -16,10 +16,13 @@ from langchain_groq import ChatGroq
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from tools.rag_tool import retrieve_from_documents
 from tools.search import search_web
 
-TOOLS = [search_web, retrieve_from_documents]
+# Only web search is exposed as a tool.
+# RAG is run unconditionally in run_response and injected as context —
+# removing it as a tool eliminates a whole class of Groq failed_generation errors
+# caused by the model generating malformed XML-style tool calls.
+TOOLS = [search_web]
 
 SYSTEM_PROMPT = (
     "You are MemOS — an intelligent AI assistant with long-term memory, "
@@ -27,7 +30,7 @@ SYSTEM_PROMPT = (
     "Capabilities:\n"
     "- Every conversation is persisted in PostgreSQL across sessions.\n"
     "- Use search_web for current events, news, or anything outside your training data.\n"
-    "- Use retrieve_from_documents for questions about uploaded documents or the knowledge base.\n"
+    "- Knowledge base context is provided above when relevant — use it to answer document questions.\n"
     "- Think step by step and cite sources whenever you use a tool.\n\n"
     "Guidelines:\n"
     "- Prefer answering directly when you already know the answer.\n"
@@ -121,13 +124,26 @@ def run_response(
 ) -> tuple[str, list[str]]:
     """
     Run the agent and return (response_text, tools_used).
-    tools_used contains the names of any tools the agent called (e.g. "search_web").
-    Persists the full exchange to PostgreSQL on success.
+
+    RAG is always executed upfront and injected into the system message as context.
+    This avoids exposing it as a callable tool, which caused Groq failed_generation
+    errors due to malformed XML-style tool calls from Llama models.
     """
-    input_messages = load_pg_messages(session_id, connection_string) + [
-        HumanMessage(content=query)
-    ]
-    tools_used: list[str] = []
+    from rag.pipeline import retrieve_context  # deferred to avoid circular import
+
+    rag_context = retrieve_context(query)
+    rag_used = "No relevant" not in rag_context
+
+    system_content = SYSTEM_PROMPT
+    if rag_used:
+        system_content += f"\n\nRelevant knowledge base context:\n{rag_context}"
+
+    history = load_pg_messages(session_id, connection_string)
+    input_messages = (
+        [SystemMessage(content=system_content)] + history + [HumanMessage(content=query)]
+    )
+
+    tools_used: list[str] = ["retrieve_from_documents"] if rag_used else []
     response_parts: list[str] = []
 
     for chunk in agent.stream(
