@@ -52,8 +52,8 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 ### 1. Clone Your Fork
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/AI-memory-assistance.git
-cd AI-memory-assistance
+git clone https://github.com/YOUR_USERNAME/MemOS.git
+cd MemOS
 ```
 
 ### 2. Set Up Environment
@@ -146,7 +146,7 @@ Fixes #45
 ## Project Structure
 
 ```
-AI-memory-assistance/
+MemOS/
 ├── app.py                    # Main Streamlit application
 ├── setup_database.py         # Database initialization
 ├── test_config.py           # Configuration tests
@@ -178,7 +178,7 @@ Looking for ways to contribute? Here are some ideas:
 
 ### 🐛 Known Issues
 
-Check the [Issues](https://github.com/dev-k99/AI-memory-assistance/issues) page for current bugs and feature requests.
+Check the [Issues](https://github.com/dev-k99/MemOS/issues) page for current bugs and feature requests.
 
 ### 📚 Documentation
 

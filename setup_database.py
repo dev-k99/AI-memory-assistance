@@ -1,6 +1,8 @@
 """
 Database Setup Script
-Run this script to create and initialize your PostgreSQL database
+Run this script to create and initialize your PostgreSQL database.
+Works with: local PostgreSQL, Azure Database for PostgreSQL Flexible Server, Supabase.
+For Azure: ensure POSTGRES_SSL=require is set in your .env file.
 """
 
 import os
@@ -17,6 +19,10 @@ POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "ai_assistant")
 POSTGRES_ADMIN_DB = os.getenv("POSTGRES_ADMIN_DB", "postgres")
+POSTGRES_SSL = os.getenv("POSTGRES_SSL", "prefer")   # use "require" for Azure / cloud DBs
+
+# Build shared SSL kwarg so every connect() call picks it up automatically
+_SSL_KWARGS = {"sslmode": POSTGRES_SSL}
 
 
 def _validate_env():
@@ -46,6 +52,7 @@ def create_database():
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD,
             database=POSTGRES_ADMIN_DB,
+            **_SSL_KWARGS,
         )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = conn.cursor()
@@ -81,6 +88,7 @@ def initialize_schema():
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD,
             database=POSTGRES_DB,
+            **_SSL_KWARGS,
         )
         cursor = conn.cursor()
 
@@ -123,6 +131,7 @@ def test_connection():
             user=POSTGRES_USER,
             password=POSTGRES_PASSWORD,
             database=POSTGRES_DB,
+            **_SSL_KWARGS,
         )
         cursor = conn.cursor()
 

@@ -15,8 +15,8 @@ Get AI Memory Assistant running in **5 minutes**!
 ### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/dev-k99/AI-memory-assistance.git
-cd AI-memory-assistance
+git clone https://github.com/dev-k99/MemOS.git
+cd MemOS
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
