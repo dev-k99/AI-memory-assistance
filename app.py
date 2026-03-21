@@ -87,7 +87,11 @@ def get_config() -> dict[str, str]:
         "groq_api_key": _get("GROQ_API_KEY"),
         "database_url": _get("DATABASE_URL"),
         "langchain_api_key": _get("LANGCHAIN_API_KEY"),
+        "tavily_api_key": _get("TAVILY_API_KEY"),
     }
+
+    if config["tavily_api_key"]:
+        os.environ["TAVILY_API_KEY"] = config["tavily_api_key"]
 
     if config["langchain_api_key"]:
         os.environ["LANGCHAIN_API_KEY"] = config["langchain_api_key"]

@@ -26,4 +26,4 @@ pypdf>=5.1.0
 
 # Agent + Tools
 langgraph>=0.3.21
-duckduckgo-search>=7.5.3
+tavily-python>=0.5.0
